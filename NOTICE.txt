@@ -1,0 +1,7 @@
+Mitsubishi AE-200 Home Assistant integration
+
+The WebSocket/XML endpoint and request structure were informed by:
+https://github.com/natevoci/ae200
+
+This integration is an independent reimplementation and is not affiliated with
+or endorsed by Mitsubishi Electric or the referenced repository's author.

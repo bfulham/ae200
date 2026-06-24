@@ -1,0 +1,61 @@
+{
+  "title": "Mitsubishi AE-200",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to an AE-200 controller",
+        "description": "The controller must be reachable from Home Assistant. The integration uses the local WebSocket endpoint at /b_xmlproc/.",
+        "data": {
+          "host": "IP address or hostname",
+          "name": "Controller name"
+        },
+        "data_description": {
+          "host": "The IP address or hostname used by Home Assistant to reach the AE-200.",
+          "name": "A friendly name for this controller."
+        }
+      },
+      "reconfigure": {
+        "title": "Change AE-200 address",
+        "description": "Enter the controller's new IP address or hostname. The connection is tested before it is saved.",
+        "data": {
+          "host": "IP address or hostname"
+        },
+        "data_description": {
+          "host": "The new address used by Home Assistant to reach the controller."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the controller or read its groups",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This controller is already configured",
+      "cannot_connect": "The imported controller address is invalid",
+      "reconfigure_successful": "Controller address updated"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AE-200 options",
+        "description": "Controls are always sent to exactly one selected group. AUTO is sent as Mode=\"AUTO\" and AUTOCOOL/AUTOHEAT are accepted as the resulting automatic state.",
+        "data": {
+          "update_interval": "Polling interval (seconds)",
+          "timeout": "Connection timeout (seconds)",
+          "verify_writes": "Verify every write by reading the selected group back",
+          "verify_attempts": "Write verification attempts",
+          "write_delay": "Delay before each verification read (seconds)",
+          "minimum_temperature": "Fallback minimum target temperature",
+          "maximum_temperature": "Fallback maximum target temperature",
+          "enable_swing_control": "Enable air-direction control",
+          "enable_dry_mode": "Expose Dry mode (not observed in supplied dump)",
+          "enable_fan_only_mode": "Expose Fan-only mode (not observed in supplied dump)"
+        }
+      }
+    },
+    "error": {
+      "invalid_temperature_range": "Minimum temperature must be lower than maximum temperature"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "domain": "ae200",
+  "name": "Mitsubishi AE-200",
+  "codeowners": [
+    "@bfulham"
+  ],
+  "config_flow": true,
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "version": "0.1.0"
+}

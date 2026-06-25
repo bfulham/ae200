@@ -175,9 +175,12 @@ class AE200ConfigFlow(
                 if duplicate is not None:
                     return self.async_abort(reason="already_configured")
 
-                return self.async_update_reload_and_abort(
+                self.hass.config_entries.async_update_entry(
                     entry,
-                    data_updates={CONF_HOST: host},
+                    data={**entry.data, CONF_HOST: host},
+                )
+                return self.async_abort(
+                    reason="reconfigure_successful",
                 )
 
         return self.async_show_form(
@@ -231,17 +234,11 @@ class AE200ConfigFlow(
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
 
-        return AE200OptionsFlow(config_entry)
+        return AE200OptionsFlow()
 
 
 class AE200OptionsFlow(config_entries.OptionsFlow):
     """Configure polling, verification and optional features."""
-
-    def __init__(
-        self,
-        config_entry: config_entries.ConfigEntry,
-    ) -> None:
-        self._config_entry = config_entry
 
     async def async_step_init(
         self,
@@ -266,7 +263,7 @@ class AE200OptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=self._schema(self._config_entry.options),
+            data_schema=self._schema(dict(self.config_entry.options)),
         )
 
     def _schema(
@@ -366,19 +363,10 @@ class AE200OptionsFlow(config_entries.OptionsFlow):
                     vol.Range(min=5.0, max=35.0),
                 ),
                 vol.Required(
-                    CONF_FAILURE_GRACE,
-    CONF_MAX_TEMP,
-    CONF_POLL_RETRIES,
-    CONF_RETRY_DELAY,
+                    CONF_MAX_TEMP,
                     default=current(
-                        CONF_FAILURE_GRACE,
-    CONF_MAX_TEMP,
-    CONF_POLL_RETRIES,
-    CONF_RETRY_DELAY,
-                        DEFAULT_FAILURE_GRACE,
-    DEFAULT_MAX_TEMP,
-    DEFAULT_POLL_RETRIES,
-    DEFAULT_RETRY_DELAY,
+                        CONF_MAX_TEMP,
+                        DEFAULT_MAX_TEMP,
                     ),
                 ): vol.All(
                     vol.Coerce(float),

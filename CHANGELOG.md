@@ -1,6 +1,19 @@
 # Changelog
 
+## 1.1.1
+
+- Fix the existing config entry **Configure** form returning a 500 error.
+- Update the options flow for Home Assistant 2025.12 and newer by using
+  the injected `self.config_entry` property.
+- Repair the malformed maximum-temperature options schema.
+- Prevent the reconfigure flow from combining its update listener with a
+  second reload helper.
+
 ## 1.1.0
+
+- Fix the existing-entry Configure form on Home Assistant 2025.12 and newer by using the injected `self.config_entry` options-flow property.
+- Repair the malformed maximum-temperature field in the options schema.
+- Avoid combining a config-entry update listener with the reconfigure reload helper.
 
 - Prepare the integration for publication from `https://github.com/bfulham/ae200`.
 - Update HACS metadata, badges, issue links, documentation and release automation for the final repository.

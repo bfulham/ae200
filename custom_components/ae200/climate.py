@@ -352,6 +352,7 @@ class AE200ClimateEntity(AE200GroupEntity, ClimateEntity):
             "hold": self.status.get(ATTR_HOLD),
             "energy_control": self.status.get(ATTR_ENERGY_CONTROL),
             "hvac_action_is_inferred": True,
+            "data_stale": self.data_is_stale,
         }
 
     async def async_set_hvac_mode(

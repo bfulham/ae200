@@ -22,6 +22,10 @@ class AE200Data:
     groups: Mapping[str, AE200Group]
     statuses: Mapping[str, Mapping[str, str]]
     protocol_errors: tuple[Mapping[str, str], ...] = field(default_factory=tuple)
+    stale_groups: frozenset[str] = field(default_factory=frozenset)
+    using_stale_data: bool = False
+    consecutive_poll_failures: int = 0
+    last_poll_error: str | None = None
 
     @property
     def group_count(self) -> int:
@@ -58,6 +62,10 @@ class AE200Data:
             for status in self.statuses.values()
             if status.get(ATTR_SCHEDULE, "").upper() == "ON"
         )
+
+    @property
+    def stale_group_count(self) -> int:
+        return len(self.stale_groups)
 
     @property
     def raw_modes(self) -> tuple[str, ...]:

@@ -5,7 +5,9 @@
     "@bfulham"
   ],
   "config_flow": true,
+  "documentation": "https://github.com/bfulham/ae200",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "version": "0.1.0"
+  "issue_tracker": "https://github.com/bfulham/ae200/issues",
+  "version": "1.1.0"
 }

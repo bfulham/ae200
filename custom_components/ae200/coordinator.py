@@ -6,7 +6,7 @@ import asyncio
 from datetime import timedelta
 import logging
 import time
-from typing import Mapping
+from typing import Awaitable, Callable, Mapping, TypeVar
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -16,12 +16,16 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import (
     ATTR_DRIVE,
     ATTR_MODE,
-    CONF_TIMEOUT,
+    CONF_FAILURE_GRACE,
+    CONF_POLL_RETRIES,
+    CONF_RETRY_DELAY,
     CONF_UPDATE_INTERVAL,
     CONF_VERIFY_ATTEMPTS,
     CONF_VERIFY_WRITES,
     CONF_WRITE_DELAY,
-    DEFAULT_TIMEOUT,
+    DEFAULT_FAILURE_GRACE,
+    DEFAULT_POLL_RETRIES,
+    DEFAULT_RETRY_DELAY,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_VERIFY_ATTEMPTS,
     DEFAULT_VERIFY_WRITES,
@@ -31,16 +35,17 @@ from .const import (
 from .models import AE200Data
 from .protocol import (
     AE200Client,
-    AE200ConnectionError,
     AE200Error,
     AE200Group,
-    AE200WriteError,
     values_match,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 REDISCOVERY_SECONDS = 30 * 60
+REDISCOVERY_RETRY_SECONDS = 5 * 60
+
+_T = TypeVar("_T")
 
 
 class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
@@ -58,9 +63,15 @@ class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
         self._last_discovery = 0.0
         self._operation_lock = asyncio.Lock()
         self.last_write_error: str | None = None
+        self.last_poll_error: str | None = None
+        self.consecutive_poll_failures = 0
+        self.using_stale_data = False
 
         update_interval = int(
-            entry.options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL)
+            entry.options.get(
+                CONF_UPDATE_INTERVAL,
+                DEFAULT_UPDATE_INTERVAL,
+            )
         )
         super().__init__(
             hass,
@@ -74,7 +85,10 @@ class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
     @property
     def verify_writes(self) -> bool:
         return bool(
-            self.entry.options.get(CONF_VERIFY_WRITES, DEFAULT_VERIFY_WRITES)
+            self.entry.options.get(
+                CONF_VERIFY_WRITES,
+                DEFAULT_VERIFY_WRITES,
+            )
         )
 
     @property
@@ -89,25 +103,118 @@ class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
     @property
     def write_delay(self) -> float:
         return float(
-            self.entry.options.get(CONF_WRITE_DELAY, DEFAULT_WRITE_DELAY)
+            self.entry.options.get(
+                CONF_WRITE_DELAY,
+                DEFAULT_WRITE_DELAY,
+            )
         )
 
+    @property
+    def poll_retries(self) -> int:
+        return int(
+            self.entry.options.get(
+                CONF_POLL_RETRIES,
+                DEFAULT_POLL_RETRIES,
+            )
+        )
+
+    @property
+    def retry_delay(self) -> float:
+        return float(
+            self.entry.options.get(
+                CONF_RETRY_DELAY,
+                DEFAULT_RETRY_DELAY,
+            )
+        )
+
+    @property
+    def failure_grace(self) -> int:
+        return int(
+            self.entry.options.get(
+                CONF_FAILURE_GRACE,
+                DEFAULT_FAILURE_GRACE,
+            )
+        )
+
+    async def _async_retry(
+        self,
+        operation: Callable[[], Awaitable[_T]],
+        description: str,
+    ) -> _T:
+        """Run a controller operation with bounded retries."""
+
+        attempts = max(1, self.poll_retries + 1)
+        last_error: AE200Error | None = None
+
+        for attempt in range(attempts):
+            try:
+                return await operation()
+            except asyncio.CancelledError:
+                raise
+            except AE200Error as exc:
+                last_error = exc
+                if attempt + 1 >= attempts:
+                    break
+
+                delay = self.retry_delay * (attempt + 1)
+                _LOGGER.debug(
+                    "AE-200 %s failed on attempt %s/%s: %s; "
+                    "retrying in %.2f seconds",
+                    description,
+                    attempt + 1,
+                    attempts,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+        assert last_error is not None
+        raise last_error
+
     async def _async_update_data(self) -> AE200Data:
-        """Fetch all group states in one coordinated operation."""
+        """Fetch all group states while tolerating brief controller dropouts."""
 
         try:
             async with self._operation_lock:
-                now = time.monotonic()
-                if (
-                    not self.groups
-                    or now - self._last_discovery >= REDISCOVERY_SECONDS
-                ):
-                    self.groups = await self.client.async_discover_groups()
-                    self._last_discovery = now
-
-                result = await self.client.async_get_status(self.groups)
+                await self._async_refresh_groups_if_due()
+                result = await self._async_retry(
+                    lambda: self.client.async_get_status(self.groups),
+                    "status poll",
+                )
         except AE200Error as exc:
-            raise UpdateFailed(str(exc)) from exc
+            return self._handle_poll_failure(exc)
+
+        previous_statuses = (
+            dict(self.data.statuses)
+            if self.data is not None
+            else {}
+        )
+        statuses = {
+            group_id: dict(status)
+            for group_id, status in result.statuses.items()
+        }
+
+        missing_groups = set(self.groups) - set(statuses)
+        stale_groups: set[str] = set()
+
+        # A partial AE-200 response should not erase otherwise valid
+        # entities. Preserve the previous value only for groups omitted
+        # from this poll and flag those groups as stale in diagnostics.
+        for group_id in missing_groups:
+            previous = previous_statuses.get(group_id)
+            if previous is not None:
+                statuses[group_id] = dict(previous)
+                stale_groups.add(group_id)
+
+        if self.consecutive_poll_failures:
+            _LOGGER.info(
+                "AE-200 communication recovered after %s failed poll(s)",
+                self.consecutive_poll_failures,
+            )
+
+        self.consecutive_poll_failures = 0
+        self.last_poll_error = None
+        self.using_stale_data = bool(stale_groups)
 
         if result.errors:
             _LOGGER.debug(
@@ -117,9 +224,97 @@ class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
 
         return AE200Data(
             groups=dict(self.groups),
-            statuses=dict(result.statuses),
+            statuses=statuses,
             protocol_errors=result.errors,
+            stale_groups=frozenset(stale_groups),
+            using_stale_data=bool(stale_groups),
+            consecutive_poll_failures=0,
+            last_poll_error=None,
         )
+
+    async def _async_refresh_groups_if_due(self) -> None:
+        """Rediscover groups without letting a transient failure stop polling."""
+
+        now = time.monotonic()
+        if (
+            self.groups
+            and now - self._last_discovery < REDISCOVERY_SECONDS
+        ):
+            return
+
+        try:
+            discovered = await self._async_retry(
+                self.client.async_discover_groups,
+                "group discovery",
+            )
+        except AE200Error:
+            if not self.groups:
+                raise
+
+            # Keep the known group list and retry discovery in five
+            # minutes. Normal status polling can continue meanwhile.
+            self._last_discovery = (
+                now
+                - REDISCOVERY_SECONDS
+                + REDISCOVERY_RETRY_SECONDS
+            )
+            _LOGGER.warning(
+                "AE-200 group rediscovery failed; continuing with the "
+                "existing %s group(s)",
+                len(self.groups),
+            )
+            return
+
+        self.groups = dict(discovered)
+        self._last_discovery = now
+
+    def _handle_poll_failure(self, exc: AE200Error) -> AE200Data:
+        """Keep the last good data during a short communication outage."""
+
+        self.consecutive_poll_failures += 1
+        self.last_poll_error = str(exc)
+
+        can_use_cache = (
+            self.data is not None
+            and bool(self.data.statuses)
+            and self.consecutive_poll_failures <= self.failure_grace
+        )
+
+        if can_use_cache:
+            self.using_stale_data = True
+            if self.consecutive_poll_failures == 1:
+                _LOGGER.warning(
+                    "AE-200 poll failed; retaining the last good state "
+                    "for up to %s failed poll(s): %s",
+                    self.failure_grace,
+                    exc,
+                )
+            else:
+                _LOGGER.debug(
+                    "AE-200 poll failure %s/%s; retaining cached state: %s",
+                    self.consecutive_poll_failures,
+                    self.failure_grace,
+                    exc,
+                )
+
+            return AE200Data(
+                groups=dict(self.data.groups),
+                statuses={
+                    group_id: dict(status)
+                    for group_id, status in self.data.statuses.items()
+                },
+                protocol_errors=self.data.protocol_errors,
+                stale_groups=frozenset(self.data.statuses),
+                using_stale_data=True,
+                consecutive_poll_failures=self.consecutive_poll_failures,
+                last_poll_error=str(exc),
+            )
+
+        self.using_stale_data = False
+        raise UpdateFailed(
+            "AE-200 communication failed "
+            f"{self.consecutive_poll_failures} consecutive time(s): {exc}"
+        ) from exc
 
     async def async_force_rediscovery(self) -> None:
         """Rediscover groups on the next refresh."""
@@ -132,12 +327,7 @@ class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
         group_id: str,
         raw_mode: str | None,
     ) -> None:
-        """Set power/mode for exactly one group.
-
-        For non-off modes this mirrors the reference integration: turn on the
-        selected group when needed, then send the mode. AUTO is written as
-        Mode="AUTO"; AUTOCOOL/AUTOHEAT are accepted on read-back.
-        """
+        """Set power/mode for exactly one group."""
 
         async with self._operation_lock:
             try:
@@ -170,7 +360,10 @@ class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
                     expected[ATTR_MODE] = raw_mode
                     expected[ATTR_DRIVE] = "ON"
 
-                await self._async_read_back_locked(group_id, expected)
+                await self._async_read_back_locked(
+                    group_id,
+                    expected,
+                )
             except HomeAssistantError:
                 raise
             except AE200Error as exc:
@@ -191,6 +384,8 @@ class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
                     attributes,
                 )
                 await self._async_read_back_locked(group_id, sent)
+            except HomeAssistantError:
+                raise
             except AE200Error as exc:
                 self.last_write_error = str(exc)
                 raise HomeAssistantError(str(exc)) from exc
@@ -280,11 +475,21 @@ class AE200Coordinator(DataUpdateCoordinator[AE200Data]):
             if self.data is not None
             else dict(self.groups)
         )
+        current_stale = (
+            set(self.data.stale_groups)
+            if self.data is not None
+            else set()
+        )
+        current_stale.discard(group_id)
 
         self.async_set_updated_data(
             AE200Data(
                 groups=current_groups,
                 statuses=current_statuses,
                 protocol_errors=errors,
+                stale_groups=frozenset(current_stale),
+                using_stale_data=bool(current_stale),
+                consecutive_poll_failures=0,
+                last_poll_error=None,
             )
         )

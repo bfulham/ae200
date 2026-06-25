@@ -133,6 +133,7 @@ async def async_setup_entry(
         ("fault_count", "Groups with faults", "mdi:alert-circle"),
         ("filter_alert_count", "Filter alerts", "mdi:air-filter"),
         ("scheduled_count", "Scheduled groups", "mdi:calendar-clock"),
+        ("stale_group_count", "Groups using cached data", "mdi:database-clock"),
     ):
         controller_entities.append(
             AE200ControllerCountSensor(
@@ -246,4 +247,6 @@ class AE200ControllerCountSensor(
             return data.filter_alert_count
         if self.key == "scheduled_count":
             return data.scheduled_count
+        if self.key == "stale_group_count":
+            return data.stale_group_count
         return 0

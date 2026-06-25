@@ -15,7 +15,10 @@ from .const import (
     CONF_ENABLE_DRY_MODE,
     CONF_ENABLE_FAN_ONLY_MODE,
     CONF_ENABLE_SWING_CONTROL,
+    CONF_FAILURE_GRACE,
     CONF_MAX_TEMP,
+    CONF_POLL_RETRIES,
+    CONF_RETRY_DELAY,
     CONF_MIN_TEMP,
     CONF_NAME,
     CONF_TIMEOUT,
@@ -26,7 +29,10 @@ from .const import (
     DEFAULT_ENABLE_DRY_MODE,
     DEFAULT_ENABLE_FAN_ONLY_MODE,
     DEFAULT_ENABLE_SWING_CONTROL,
+    DEFAULT_FAILURE_GRACE,
     DEFAULT_MAX_TEMP,
+    DEFAULT_POLL_RETRIES,
+    DEFAULT_RETRY_DELAY,
     DEFAULT_MIN_TEMP,
     DEFAULT_NAME,
     DEFAULT_TIMEOUT,
@@ -293,6 +299,36 @@ class AE200OptionsFlow(config_entries.OptionsFlow):
                     vol.Range(min=2, max=60),
                 ),
                 vol.Required(
+                    CONF_POLL_RETRIES,
+                    default=current(
+                        CONF_POLL_RETRIES,
+                        DEFAULT_POLL_RETRIES,
+                    ),
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=0, max=5),
+                ),
+                vol.Required(
+                    CONF_RETRY_DELAY,
+                    default=current(
+                        CONF_RETRY_DELAY,
+                        DEFAULT_RETRY_DELAY,
+                    ),
+                ): vol.All(
+                    vol.Coerce(float),
+                    vol.Range(min=0.1, max=5.0),
+                ),
+                vol.Required(
+                    CONF_FAILURE_GRACE,
+                    default=current(
+                        CONF_FAILURE_GRACE,
+                        DEFAULT_FAILURE_GRACE,
+                    ),
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=0, max=20),
+                ),
+                vol.Required(
                     CONF_VERIFY_WRITES,
                     default=current(
                         CONF_VERIFY_WRITES,
@@ -330,10 +366,19 @@ class AE200OptionsFlow(config_entries.OptionsFlow):
                     vol.Range(min=5.0, max=35.0),
                 ),
                 vol.Required(
-                    CONF_MAX_TEMP,
+                    CONF_FAILURE_GRACE,
+    CONF_MAX_TEMP,
+    CONF_POLL_RETRIES,
+    CONF_RETRY_DELAY,
                     default=current(
-                        CONF_MAX_TEMP,
-                        DEFAULT_MAX_TEMP,
+                        CONF_FAILURE_GRACE,
+    CONF_MAX_TEMP,
+    CONF_POLL_RETRIES,
+    CONF_RETRY_DELAY,
+                        DEFAULT_FAILURE_GRACE,
+    DEFAULT_MAX_TEMP,
+    DEFAULT_POLL_RETRIES,
+    DEFAULT_RETRY_DELAY,
                     ),
                 ): vol.All(
                     vol.Coerce(float),

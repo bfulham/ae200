@@ -18,10 +18,13 @@ CONF_MAX_TEMP: Final = "maximum_temperature"
 CONF_ENABLE_SWING_CONTROL: Final = "enable_swing_control"
 CONF_ENABLE_DRY_MODE: Final = "enable_dry_mode"
 CONF_ENABLE_FAN_ONLY_MODE: Final = "enable_fan_only_mode"
+CONF_POLL_RETRIES: Final = "poll_retries"
+CONF_RETRY_DELAY: Final = "retry_delay"
+CONF_FAILURE_GRACE: Final = "failed_polls_before_unavailable"
 
 DEFAULT_NAME: Final = "AE-200"
-DEFAULT_UPDATE_INTERVAL: Final = 15
-DEFAULT_TIMEOUT: Final = 8
+DEFAULT_UPDATE_INTERVAL: Final = 30
+DEFAULT_TIMEOUT: Final = 10
 DEFAULT_VERIFY_WRITES: Final = True
 DEFAULT_VERIFY_ATTEMPTS: Final = 3
 DEFAULT_WRITE_DELAY: Final = 1.0
@@ -30,6 +33,9 @@ DEFAULT_MAX_TEMP: Final = 30.0
 DEFAULT_ENABLE_SWING_CONTROL: Final = True
 DEFAULT_ENABLE_DRY_MODE: Final = False
 DEFAULT_ENABLE_FAN_ONLY_MODE: Final = False
+DEFAULT_POLL_RETRIES: Final = 2
+DEFAULT_RETRY_DELAY: Final = 0.75
+DEFAULT_FAILURE_GRACE: Final = 3
 
 MIN_UPDATE_INTERVAL: Final = 5
 MAX_UPDATE_INTERVAL: Final = 300

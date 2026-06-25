@@ -54,6 +54,15 @@ class AE200GroupEntity(CoordinatorEntity[AE200Coordinator]):
         return self.coordinator.data.statuses.get(self.group_id, {})
 
     @property
+    def data_is_stale(self) -> bool:
+        """Return whether this group is using cached data."""
+
+        return (
+            self.coordinator.data is not None
+            and self.group_id in self.coordinator.data.stale_groups
+        )
+
+    @property
     def available(self) -> bool:
         """Return whether the group is available."""
 

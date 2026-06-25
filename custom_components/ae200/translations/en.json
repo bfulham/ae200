@@ -39,7 +39,7 @@
     "step": {
       "init": {
         "title": "AE-200 options",
-        "description": "Controls are always sent to exactly one selected group. AUTO is sent as Mode=\"AUTO\" and AUTOCOOL/AUTOHEAT are accepted as the resulting automatic state.",
+        "description": "Controls target exactly one selected group. AUTO is sent as Mode=\"AUTO\". Brief controller or network dropouts are retried, and the last good state is retained for the configured number of failed polls.",
         "data": {
           "update_interval": "Polling interval (seconds)",
           "timeout": "Connection timeout (seconds)",
@@ -50,7 +50,10 @@
           "maximum_temperature": "Fallback maximum target temperature",
           "enable_swing_control": "Enable air-direction control",
           "enable_dry_mode": "Expose Dry mode (not observed in supplied dump)",
-          "enable_fan_only_mode": "Expose Fan-only mode (not observed in supplied dump)"
+          "enable_fan_only_mode": "Expose Fan-only mode (not observed in supplied dump)",
+          "poll_retries": "Retries after a failed poll",
+          "retry_delay": "Initial delay between poll retries (seconds)",
+          "failed_polls_before_unavailable": "Failed polls allowed before entities become unavailable"
         }
       }
     },
